@@ -3,12 +3,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isAdminAuthed } from "@/lib/admin-auth";
 import { getProtectedConfig } from "@/lib/protected-config";
 
-function getKeepFromMonthKey() {
-  const now = new Date();
-  const base = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-  const yyyy = base.getFullYear();
-  const mm = String(base.getMonth() + 1).padStart(2, "0");
-  return `${yyyy}-${mm}`;
+function getUploadedAtCutoffIso(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString();
 }
 
 export async function GET(request: NextRequest) {
@@ -23,13 +21,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const supabase = createAdminClient();
-    const keepFromMonthKey = getKeepFromMonthKey();
 
-    // 만료된 업로드 이력 자동 삭제
     await supabase
       .from("uploaded_files")
       .delete()
-      .lt("month_key", keepFromMonthKey);
+      .lt("uploaded_at", getUploadedAtCutoffIso(30));
 
     const [{ data: uploads, error: uploadError }, protectedConfig] =
       await Promise.all([
@@ -53,6 +49,9 @@ export async function GET(request: NextRequest) {
       uploads: uploads ?? [],
       protectedPhones: protectedConfig.phones,
       hasProtectedPassword: !!protectedConfig.protectedPasswordHash,
+      globalLookupEnabled: protectedConfig.globalLookupEnabled,
+      hasGlobalLookupPassword: !!protectedConfig.globalLookupPasswordHash,
+      globalLookupPasswordHint: protectedConfig.globalLookupPasswordHint,
     });
   } catch (error) {
     return NextResponse.json(

@@ -37,15 +37,14 @@ function formatPhoneNumber(value: string) {
 
 export default function TrackingSearch() {
   const [phone, setPhone] = useState("");
-  const [protectedPassword, setProtectedPassword] = useState("");
-  const [needsProtectedPassword, setNeedsProtectedPassword] = useState(false);
+  const [lookupPassword, setLookupPassword] = useState("");
+  const [passwordScope, setPasswordScope] = useState<"global" | "protected" | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [searched, setSearched] = useState(false);
 
-  // 디폴트 접힘
   const [isNoticeOpen, setIsNoticeOpen] = useState(false);
 
   async function handleSearch() {
@@ -64,7 +63,7 @@ export default function TrackingSearch() {
         },
         body: JSON.stringify({
           phone: normalizedPhone,
-          protectedPassword,
+          lookupPassword,
         }),
       });
 
@@ -72,8 +71,8 @@ export default function TrackingSearch() {
 
       if (!res.ok || !result.ok) {
         if (result.requiresPassword) {
-          setNeedsProtectedPassword(true);
-          setError(result.error ?? "이 번호는 추가 비밀번호가 필요합니다.");
+          setPasswordScope(result.passwordScope ?? "global");
+          setError(result.error ?? "조회 비밀번호를 입력해주세요.");
           setShipments([]);
           setSearched(false);
           return;
@@ -84,7 +83,7 @@ export default function TrackingSearch() {
         return;
       }
 
-      setNeedsProtectedPassword(false);
+      setPasswordScope(null);
       setError("");
       setShipments(result.shipments ?? []);
     } catch {
@@ -154,19 +153,23 @@ export default function TrackingSearch() {
               setSearched(false);
               setError("");
               setShipments([]);
-              setNeedsProtectedPassword(false);
-              setProtectedPassword("");
+              setPasswordScope(null);
+              setLookupPassword("");
             }}
             placeholder="휴대폰번호(11자리) 입력"
             className="w-full rounded-xl border border-gray-600 px-4 py-3 text-black placeholder:text-gray-500 outline-none"
           />
 
-          {needsProtectedPassword && (
+          {passwordScope && (
             <input
               type="password"
-              value={protectedPassword}
-              onChange={(e) => setProtectedPassword(e.target.value)}
-              placeholder="추가 비밀번호 입력"
+              value={lookupPassword}
+              onChange={(e) => setLookupPassword(e.target.value)}
+              placeholder={
+                passwordScope === "protected"
+                  ? "보호 번호 비밀번호 입력"
+                  : "조회 비밀번호 입력"
+              }
               className="w-full rounded-xl border border-gray-600 px-4 py-3 text-black placeholder:text-gray-500 outline-none"
             />
           )}
@@ -229,7 +232,7 @@ export default function TrackingSearch() {
         {searched &&
           !loading &&
           !error &&
-          !needsProtectedPassword &&
+          !passwordScope &&
           shipments.length === 0 && (
             <p className="mt-4 text-sm text-gray-700">
               최근 20일 내 조회 가능한 송장이 없습니다.

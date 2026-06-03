@@ -5,13 +5,20 @@ import { isAdminAuthed } from "@/lib/admin-auth";
 
 export const runtime = "nodejs";
 
-function getKeepFromMonthKey() {
-  const now = new Date();
-  const base = new Date(now.getFullYear(), now.getMonth() - 2, 1);
-  const yyyy = base.getFullYear();
-  const mm = String(base.getMonth() + 1).padStart(2, "0");
-  return `${yyyy}-${mm}`;
-}
+type ShipmentRow = {
+  month_key: string;
+  shipped_date: string;
+  tracking_number: string;
+  recipient_name: string | null;
+  address: string | null;
+  phone_raw: string | null;
+  phone_normalized: string;
+  item_name: string | null;
+  remark_no: string | null;
+  customs_status: string | null;
+  weight_kg: number | null;
+  amount: number | null;
+};
 
 function chunkArray<T>(items: T[], size: number) {
   const chunks: T[][] = [];
@@ -21,13 +28,21 @@ function chunkArray<T>(items: T[], size: number) {
   return chunks;
 }
 
-function getMonthKeyFromFileName(fileName: string) {
-  const match = fileName.match(/(20\d{2})[-_.](0?[1-9]|1[0-2])/);
-  if (!match) return null;
+function getDateCutoffString(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
 
-  const yyyy = match[1];
-  const mm = match[2].padStart(2, "0");
-  return `${yyyy}-${mm}`;
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function getUploadedAtCutoffIso(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString();
 }
 
 function getDominantMonthKey(items: { month_key: string }[]) {
@@ -53,14 +68,15 @@ function getDominantMonthKey(items: { month_key: string }[]) {
 }
 
 export async function POST(request: NextRequest) {
-    const adminCookie = request.cookies.get("admin_auth")?.value;
-  
-    if (!isAdminAuthed(adminCookie)) {
-      return NextResponse.json(
-        { ok: false, error: "관리자 로그인이 필요합니다." },
-        { status: 401 }
-      );
-    }
+  const adminCookie = request.cookies.get("admin_auth")?.value;
+
+  if (!isAdminAuthed(adminCookie)) {
+    return NextResponse.json(
+      { ok: false, error: "관리자 로그인이 필요합니다." },
+      { status: 401 }
+    );
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get("file");
@@ -82,33 +98,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const monthKeyFromFileName = getMonthKeyFromFileName(file.name);
-    const dominantMonthKey = getDominantMonthKey(parsed.shipments);
-    const targetMonthKey = monthKeyFromFileName ?? dominantMonthKey;
-
-    if (!targetMonthKey) {
-      return NextResponse.json(
-        { ok: false, error: "업로드 대상 월을 판단할 수 없습니다." },
-        { status: 400 }
-      );
-    }
+    const shippedDateCutoff = getDateCutoffString(30);
 
     const filteredShipments = parsed.shipments.filter(
-      (item) => item.month_key === targetMonthKey
+      (item: ShipmentRow) => item.shipped_date >= shippedDateCutoff
     );
 
-    const otherMonthSkippedRows =
+    const outsideRangeSkippedRows =
       parsed.shipments.length - filteredShipments.length;
 
     if (filteredShipments.length === 0) {
       return NextResponse.json(
         {
           ok: false,
-          error: `파일명 기준 월(${targetMonthKey})에 해당하는 데이터가 없습니다.`,
+          error: "최근 30일 기준으로 저장할 수 있는 출고 데이터가 없습니다.",
         },
         { status: 400 }
       );
     }
+
+    const displayMonthKey =
+      getDominantMonthKey(filteredShipments) ??
+      getDominantMonthKey(parsed.shipments) ??
+      null;
 
     const supabase = createAdminClient();
 
@@ -116,10 +128,10 @@ export async function POST(request: NextRequest) {
       .from("uploaded_files")
       .insert({
         file_name: file.name,
-        month_key: targetMonthKey,
+        month_key: displayMonthKey,
         row_count_total: parsed.rowCountTotal,
         row_count_valid: filteredShipments.length,
-        row_count_skipped: parsed.rowCountSkipped + otherMonthSkippedRows,
+        row_count_skipped: parsed.rowCountSkipped + outsideRangeSkippedRows,
       })
       .select("id")
       .single();
@@ -133,27 +145,18 @@ export async function POST(request: NextRequest) {
 
     const sourceFileId = uploadedFile.id;
 
-    const { error: deleteMonthError } = await supabase
-      .from("shipments")
-      .delete()
-      .eq("month_key", targetMonthKey);
-
-    if (deleteMonthError) {
-      return NextResponse.json(
-        { ok: false, error: deleteMonthError.message },
-        { status: 500 }
-      );
-    }
-
-    const rowsToInsert = filteredShipments.map((item) => ({
+    const rowsToUpsert = filteredShipments.map((item: ShipmentRow) => ({
       ...item,
       source_file_id: sourceFileId,
     }));
 
-    const chunks = chunkArray(rowsToInsert, 500);
+    const chunks = chunkArray(rowsToUpsert, 500);
 
     for (const chunk of chunks) {
-      const { error } = await supabase.from("shipments").insert(chunk);
+      const { error } = await supabase.from("shipments").upsert(chunk, {
+        onConflict: "tracking_number",
+      });
+
       if (error) {
         return NextResponse.json(
           { ok: false, error: error.message },
@@ -162,28 +165,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const keepFromMonthKey = getKeepFromMonthKey();
-
-    const { error: cleanupError } = await supabase
+    const { error: cleanupShipmentsError } = await supabase
       .from("shipments")
       .delete()
-      .lt("month_key", keepFromMonthKey);
+      .lt("shipped_date", shippedDateCutoff);
 
-      const { error: uploadHistoryCleanupError } = await supabase
-  .from("uploaded_files")
-  .delete()
-  .lt("month_key", keepFromMonthKey);
-
-if (uploadHistoryCleanupError) {
-  return NextResponse.json(
-    { ok: false, error: uploadHistoryCleanupError.message },
-    { status: 500 }
-  );
-}
-
-    if (cleanupError) {
+    if (cleanupShipmentsError) {
       return NextResponse.json(
-        { ok: false, error: cleanupError.message },
+        { ok: false, error: cleanupShipmentsError.message },
+        { status: 500 }
+      );
+    }
+
+    const { error: cleanupUploadHistoryError } = await supabase
+      .from("uploaded_files")
+      .delete()
+      .lt("uploaded_at", getUploadedAtCutoffIso(30));
+
+    if (cleanupUploadHistoryError) {
+      return NextResponse.json(
+        { ok: false, error: cleanupUploadHistoryError.message },
         { status: 500 }
       );
     }
@@ -194,12 +195,12 @@ if (uploadHistoryCleanupError) {
       summary: {
         fileName: file.name,
         sheetName: parsed.sheetName,
-        targetMonthKey,
+        targetMonthKey: displayMonthKey,
         totalRows: parsed.rowCountTotal,
         parsedRows: parsed.shipments.length,
         skippedInvalidRows: parsed.rowCountSkipped,
-        skippedOtherMonthRows: otherMonthSkippedRows,
-        insertedRows: rowsToInsert.length,
+        skippedOtherMonthRows: outsideRangeSkippedRows,
+        insertedRows: rowsToUpsert.length,
       },
     });
   } catch (error) {

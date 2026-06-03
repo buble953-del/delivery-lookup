@@ -46,8 +46,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+
     const normalizedPhone = normalizePhone(body?.phone ?? "");
-    const protectedPassword = String(body?.protectedPassword ?? "").trim();
+    const lookupPassword = String(body?.lookupPassword ?? "").trim();
 
     if (!normalizedPhone) {
       return NextResponse.json(
@@ -63,14 +64,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { phones, protectedPasswordHash } = await getProtectedConfig();
+    const {
+      phones,
+      protectedPasswordHash,
+      globalLookupEnabled,
+      globalLookupPasswordHash,
+    } = await getProtectedConfig();
+
     const isProtectedPhone = phones.some(
       (item) => item.phone_normalized === normalizedPhone
     );
 
     if (isProtectedPhone) {
       const verified = verifyProtectedPassword(
-        protectedPassword,
+        lookupPassword,
         protectedPasswordHash
       );
 
@@ -79,7 +86,25 @@ export async function POST(request: NextRequest) {
           {
             ok: false,
             requiresPassword: true,
-            error: "이 번호는 추가 비밀번호가 필요합니다.",
+            passwordScope: "protected",
+            error: "이 번호는 보호 번호 비밀번호가 필요합니다.",
+          },
+          { status: 401 }
+        );
+      }
+    } else if (globalLookupEnabled) {
+      const verified = verifyProtectedPassword(
+        lookupPassword,
+        globalLookupPasswordHash
+      );
+
+      if (!verified) {
+        return NextResponse.json(
+          {
+            ok: false,
+            requiresPassword: true,
+            passwordScope: "global",
+            error: "조회 비밀번호를 입력해주세요.",
           },
           { status: 401 }
         );
