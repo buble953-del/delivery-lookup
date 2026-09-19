@@ -216,7 +216,7 @@ export default function TrackingSearch() {
                     송장번호 복사
                   </button>
                   <a
-                    href="https://www.shiptrack.co.kr/"
+                    href="https://track.shiptrack.co.kr/"
                     target="_blank"
                     rel="noreferrer"
                     className="flex-1 rounded-lg bg-black text-white py-2 text-sm text-center"
