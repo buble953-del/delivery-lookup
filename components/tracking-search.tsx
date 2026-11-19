@@ -128,18 +128,23 @@ export default function TrackingSearch() {
           </button>
 
           <div
-            className={`overflow-hidden transition-all duration-500 ease-in-out ${
-              isNoticeOpen ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
+            className={`grid transition-all duration-500 ease-in-out ${
+              isNoticeOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
             }`}
           >
-            <div className="px-4 pb-4 space-y-2 text-sm text-gray-800 leading-6">
-              <p>* 모든 제품은 검수과정을 거쳐서 출고됩니다.</p>
-              <p>* 검수가 완료되면 출고가 진행되며, 출고 송장이 조회됩니다.</p>
-              <p>* 송장은 있으나 배송 조회가 되지 않을 경우, 해외 통관중입니다.</p>
-              <p>* 국내 입항 시 조회가 시작되니 조금만 기다려 주세요!</p>
-              <p>* 통관 기간은 예측이 불가합니다.</p>
-              <p>* 통관 완료 후 1~2일 내 도착합니다.</p>
-              <p>* 감사합니다.</p>
+            <div className="overflow-hidden">
+              <div className="px-4 pb-4 space-y-2 text-sm text-gray-800 leading-6">
+                <p>* 모든 제품은 검수과정을 거쳐서 출고됩니다.</p>
+                <p>* 보통 1-2일정도 중국 저희 배송지로 이동, 검수합니다.</p>
+                <p>* (이 과정에서 검수 실패시 교환 기간이 소요되실수있으십니다.)</p>
+                <p>* 검수가 완료되면 출고가 진행되며, 출고 송장이 조회됩니다.</p>
+                <p>* 송장은 있으나 배송 조회가 되지 않을 경우, 해외 통관중입니다.</p>
+                <p>* 국내 입항 시 조회,추적이 시작되니 조금만 기다려 주세요!</p>
+                <p>* 통관 기간은 예측이 불가합니다. 세관사정에 따라 다릅니다.</p>
+                <p>* 통관 완료 후 1~2일 내 도착합니다.</p>
+                <p>* 조금만 기다려주시면 금방 받아보실수 있게 하겠습니다!</p>
+                <p>* 감사합니다.</p>
+              </div>
             </div>
           </div>
         </div>
