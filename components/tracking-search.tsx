@@ -108,7 +108,7 @@ export default function TrackingSearch() {
       <div className="w-full max-w-md rounded-2xl border border-gray-200 p-6 shadow-sm text-black">
         <h1 className="text-2xl font-bold text-black mb-2">배송조회</h1>
         <p className="text-sm text-black mb-6">
-          휴대폰번호를 입력해 출고 송장을 조회하세요. (CJ대한통운)
+          휴대폰번호를 입력해 출고 송장을 조회하세요.
         </p>
 
         <div className="mt-5 mb-5 rounded-xl border border-gray-200 bg-gray-50">
@@ -145,20 +145,25 @@ export default function TrackingSearch() {
         </div>
 
         <div className="space-y-3">
-          <input
-            type="text"
-            value={phone}
-            onChange={(e) => {
-              setPhone(formatPhoneNumber(e.target.value));
-              setSearched(false);
-              setError("");
-              setShipments([]);
-              setPasswordScope(null);
-              setLookupPassword("");
-            }}
-            placeholder="휴대폰번호(11자리) 입력"
-            className="w-full rounded-xl border border-gray-600 px-4 py-3 text-black placeholder:text-gray-500 outline-none"
-          />
+          <div className="flex items-center gap-2 rounded-xl border border-gray-600 px-4 max-[359px]:px-3">
+            <input
+              type="text"
+              value={phone}
+              onChange={(e) => {
+                setPhone(formatPhoneNumber(e.target.value));
+                setSearched(false);
+                setError("");
+                setShipments([]);
+                setPasswordScope(null);
+                setLookupPassword("");
+              }}
+              placeholder="휴대폰번호(11자리) 입력"
+              className="min-w-0 flex-1 bg-transparent py-3 text-sm leading-6 text-black placeholder:text-gray-400 outline-none max-[359px]:placeholder:text-[11px]"
+            />
+            <span className="shrink-0 whitespace-nowrap text-xl font-bold text-neutral-500 max-[399px]:text-base max-[359px]:text-sm">
+              CJ 대한통운
+            </span>
+          </div>
 
           {passwordScope && (
             <input
